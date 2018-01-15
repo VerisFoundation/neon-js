@@ -1,4 +1,4 @@
-export const ADDR_VERSION = '17'
+export const ADDR_VERSION = '46'
 
 export const ASSETS = {
   NEO: 'NEO',
