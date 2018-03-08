@@ -19,8 +19,7 @@
     "zopfli-webpack-plugin": "^0.1.0"
   },
   "name": "@VerisFoundation/neon-vrs-js",
-  "description":
-    "Javascript libraries for neo wallet using https://github.com/neochainio/neowallet/blob/master/js/wallet.js as the original source.",
+  "description": "Javascript libraries for neo wallet using https://github.com/neochainio/neowallet/blob/master/js/wallet.js as the original source.",
   "version": "2.3.1",
   "main": "lib/index.js",
   "browser": "lib/browser.js",
@@ -40,17 +39,13 @@
     "wif": "^2.0.6"
   },
   "scripts": {
-    "test":
-      "./node_modules/.bin/mocha --compilers js:babel-core/register --require ./tests/common.js --recursive ./tests",
-    "test:unit":
-      "./node_modules/.bin/mocha --compilers js:babel-core/register --require ./tests/common.js --recursive ./tests/unit",
-    "test:integration":
-      "./node_modules/.bin/mocha --compilers js:babel-core/register --require ./tests/common.js --recursive ./tests/integration",
+    "test": "./node_modules/.bin/mocha --compilers js:babel-core/register --require ./tests/common.js --recursive ./tests",
+    "test:unit": "./node_modules/.bin/mocha --compilers js:babel-core/register --require ./tests/common.js --recursive ./tests/unit",
+    "test:integration": "./node_modules/.bin/mocha --compilers js:babel-core/register --require ./tests/common.js --recursive ./tests/integration",
     "lint": "./node_modules/.bin/eslint ./src/**/*.js ./tests/**/*.js",
     "build:dev": "./node_modules/.bin/webpack --env.dev",
     "build:prod": "./node_modules/.bin/webpack --env.prod",
-    "watch:test":
-      "./node_modules/.bin/mocha --compilers js:babel-core/register --require ./tests/common.js --recursive ./tests/unit --bail --watch",
+    "watch:test": "./node_modules/.bin/mocha --compilers js:babel-core/register --require ./tests/common.js --recursive ./tests/unit --bail --watch",
     "watch:docs": "cd source && sphinx-autobuild . _build/html",
     "build:docs": "cd source && sphinx-versioning -g ../ -l ./conf.py build source ../docs",
     "deploy:docs": "cd source && sphinx-versioning -g ../ -l ./conf.py push source gh-pages .",
@@ -61,12 +56,20 @@
     "type": "git",
     "url": "git+https://github.com/VerisFoundation/neon-vrs-js.git"
   },
-  "keywords": ["neo", "antshares", "javascript", "libraries"],
+  "keywords": [
+    "neo",
+    "antshares",
+    "javascript",
+    "libraries"
+  ],
   "author": "Ethan Fast <ejhfast@gmail.com> (https://github.com/Ejhfast)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/VerisFoundation/neon-vrs-js/issues"
   },
   "homepage": "https://github.com/VerisFoundation/neon-vrs-js#readme",
-  "files": ["lib/", "src/"]
+  "files": [
+    "lib/",
+    "src/"
+  ]
 }
