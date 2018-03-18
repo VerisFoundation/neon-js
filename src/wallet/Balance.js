@@ -1,39 +1,8 @@
+import AssetBalance from './components/AssetBalance'
 import { Transaction } from '../transactions'
 import { ASSETS } from '../consts'
 import { Fixed8 } from '../utils'
 import { Query } from '../rpc'
-
-/**
- * @typedef AssetBalance
- * @property {Fixed8} balance - The total balance in this AssetBalance
- * @property {Coin[]} unspent - Unspent coins
- * @property {Coin[]} spent - Spent coins
- * @property {Coin[]} unconfirmed - Unconfirmed coins
- */
-
-/**
-* @typedef Coin
-* @property {number} index - Index in list.
-* @property {string} txid - Transaction ID which produced this coin.
-* @property {Fixed8} value - Value of this coin.
-*/
-
-const cleanAssetBalance = (assetBalance) => {
-  return {
-    balance: new Fixed8(assetBalance.balance),
-    unspent: assetBalance.unspent ? assetBalance.unspent.map(coin => cleanCoin(coin)) : [],
-    spent: assetBalance.spent ? assetBalance.spent.map(coin => cleanCoin(coin)) : [],
-    unconfirmed: assetBalance.unconfirmed ? assetBalance.unconfirmed.map(coin => cleanCoin(coin)) : []
-  }
-}
-
-const cleanCoin = (coin) => {
-  return {
-    index: coin.index,
-    txid: coin.txid,
-    value: new Fixed8(coin.value)
-  }
-}
 
 /**
  * @class Balance
@@ -47,10 +16,14 @@ const cleanCoin = (coin) => {
  * @param {object} bal.tokens - The collection of tokens in this Balance
  */
 class Balance {
-  constructor (bal) {
-    this.address = bal.address
-    this.net = bal.net
+  constructor (bal = {}) {
+    /** The address for this Balance */
+    this.address = bal.address || ''
+    /** The network for this Balance */
+    this.net = bal.net || 'NoNet'
+    /** The symbols of assets found in this Balance. Use this symbol to find the corresponding key in the assets object. */
     this.assetSymbols = bal.assetSymbols ? bal.assetSymbols : []
+    /** The object containing the balances for each asset keyed by its symbol. */
     this.assets = {}
     if (bal.assets) {
       Object.keys(bal.assets).map((key) => {
@@ -59,8 +32,14 @@ class Balance {
         }
       })
     }
+    /** The symbols of the NEP5 tokens in this Balance. Use this symbol to find the corresponding key in the tokens object. */
     this.tokenSymbols = bal.tokenSymbols ? bal.tokenSymbols : []
+    /** The token balances in this Balance for each token keyed by its symbol. */
     this.tokens = bal.tokens ? bal.tokens : {}
+  }
+
+  get [Symbol.toStringTag] () {
+    return 'Balance'
   }
 
   /**
@@ -79,10 +58,10 @@ class Balance {
    * @param {AssetBalance} [assetBalance] - The assetBalance if initialized. Default is a zero balance object.
    * @return this
    */
-  addAsset (sym, assetBalance = { balance: new Fixed8(0), spent: [], unspent: [], unconfirmed: [] }) {
+  addAsset (sym, assetBalance = AssetBalance()) {
     sym = sym.toUpperCase()
     this.assetSymbols.push(sym)
-    const cleanedAssetBalance = cleanAssetBalance(assetBalance)
+    const cleanedAssetBalance = AssetBalance(assetBalance)
     this.assets[sym] = cleanedAssetBalance
     return this
   }
@@ -150,19 +129,33 @@ class Balance {
   }
 
   /**
-   * Export this class as a string
-   * @return {string}
+   * Informs the Balance that the next block is confirmed, thus moving all unconfirmed transaction to unspent.
+   * @return {Balance}
+   */
+  confirm () {
+    for (const sym of this.assetSymbols) {
+      let assetBalance = this.assets[sym]
+      assetBalance.unspent = assetBalance.unspent.concat(assetBalance.unconfirmed)
+      assetBalance.unconfirmed = []
+    }
+    return this
+  }
+
+  /**
+   * Export this class as a plain JS object
+   * @return {object}
    */
   export () {
-    return JSON.stringify({
+    return {
       net: this.net,
       address: this.address,
       assetSymbols: this.assetSymbols,
-      assets: this.assets,
+      assets: exportAssets(this.assets),
       tokenSymbols: this.tokenSymbols,
       tokens: this.tokens
-    })
+    }
   }
+
   /**
    * Verifies the coins in balance are unspent. This is an expensive call.
    * @param {string} url - NEO Node to check against.
@@ -191,7 +184,7 @@ class Balance {
  * @param {AssetBalance} assetBalance
  * @return {Promise<AssetBalance>} Returns a new AssetBalance
  */
-export const verifyAssetBalance = (url, assetBalance) => {
+const verifyAssetBalance = (url, assetBalance) => {
   let newAssetBalance = { balance: new Fixed8(0), spent: [], unspent: [], unconfirmed: [] }
   return verifyCoins(url, assetBalance.unspent)
     .then((values) => {
@@ -215,7 +208,7 @@ export const verifyAssetBalance = (url, assetBalance) => {
  * @param {Coin[]} coinArr
  * @return {Promise<Coin[]>}
  */
-export const verifyCoins = (url, coinArr) => {
+const verifyCoins = (url, coinArr) => {
   const promises = []
   for (const coin of coinArr) {
     const promise = Query.getTxOut(coin.txid, coin.index)
@@ -235,3 +228,26 @@ export const verifyCoins = (url, coinArr) => {
 }
 
 export default Balance
+
+const exportAssets = (assets) => {
+  const exported = {}
+  Object.keys(assets).map(key => {
+    const assetBalance = assets[key]
+    const exportedAssetBalance = {
+      balance: assetBalance.balance.toNumber(),
+      spent: assetBalance.spent.map(c => exportCoin(c)),
+      unspent: assetBalance.unspent.map(c => exportCoin(c)),
+      unconfirmed: assetBalance.unconfirmed.map(c => exportCoin(c))
+    }
+    exported[key] = exportedAssetBalance
+  })
+  return exported
+}
+
+const exportCoin = (coin) => {
+  return {
+    index: coin.index,
+    txid: coin.txid,
+    value: coin.value.toNumber()
+  }
+}

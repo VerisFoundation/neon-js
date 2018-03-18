@@ -2,8 +2,11 @@ import Query from './query'
 import { isAddress } from '../wallet'
 import semver from 'semver'
 import { RPC_VERSION, DEFAULT_RPC, NEO_NETWORK } from '../consts'
+import logger from '../logging'
 
-const versionRegex = /NEO: (\d+\.\d+\.\d+)/
+const log = logger('rpc')
+
+const versionRegex = /NEO:(\d+\.\d+\.\d+)/
 /**
  * @class RPCClient
  * @classdesc
@@ -13,32 +16,38 @@ const versionRegex = /NEO: (\d+\.\d+\.\d+)/
  */
 class RPCClient {
   constructor (net, version = RPC_VERSION) {
-    /**
-     * @type {string}
-     * The URL of the node that this client queries.
-     */
     if (net === NEO_NETWORK.MAIN) {
       this.net = DEFAULT_RPC.MAIN
     } else if (net === NEO_NETWORK.TEST) {
       this.net = DEFAULT_RPC.TEST
     } else {
+      /**
+        * The URL of the node that this client queries.
+        * @type string
+        */
       this.net = net
     }
     /**
-     * @type {Query[]}
      * History of queries made with this client.
+     * @type Query[]
      */
+
     this.history = []
 
+    /**
+     * Version of this client. Used to check if RPC call is implemented.
+     * @type string
+     */
+    this.version = ''
     if (semver.valid(version)) {
-      /**
-      * @type {string}
-      * Version of this client. Used to check if RPC call is implemented.
-      */
       this.version = semver.clean(version)
     } else {
       throw new Error(`Invalid Version: ${version}`)
     }
+  }
+
+  get [Symbol.toStringTag] () {
+    return 'RPC Client'
   }
 
   /**
@@ -48,6 +57,7 @@ class RPCClient {
    */
   execute (query) {
     this.history.push(query)
+    log.info(`RPC: ${this.net} executing Query[${query.req.method}]`)
     return query.execute(this.net)
   }
 
@@ -75,6 +85,7 @@ class RPCClient {
   }
 
   /**
+   * Gets the state of an asset given an id.
    * @param {string} assetId
    * @return {Promise<object>}
    */
@@ -92,6 +103,18 @@ class RPCClient {
    */
   getBlock (indexOrHash, verbose = 1) {
     return this.execute(Query.getBlock(indexOrHash, verbose))
+      .then((res) => {
+        return res.result
+      })
+  }
+
+  /**
+   * Gets the block hash at a given height.
+   * @param {number} index
+   * @return {Promise<string>}
+   */
+  getBlockHash (index) {
+    return this.execute(Query.getBlockHash(index))
       .then((res) => {
         return res.result
       })
@@ -203,6 +226,7 @@ class RPCClient {
   }
 
   /**
+   * Gets the transaction output given a transaction id and index
    * @param {string} txid
    * @param {number} index
    * @return {Promise<object>}
@@ -234,6 +258,7 @@ class RPCClient {
         }
       })
   }
+
   /**
    * Calls a smart contract with the given parameters. This method is a local invoke, results are not reflected on the blockchain.
    * @param {string} scriptHash

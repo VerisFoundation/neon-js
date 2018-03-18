@@ -1,9 +1,10 @@
 import axios from 'axios'
-import { Account, Balance } from '../wallet'
+import { Account, Balance, Claims } from '../wallet'
 import { Transaction, TxAttrUsage } from '../transactions'
 import { Query } from '../rpc'
 import { ASSET_ID } from '../consts'
 import { Fixed8, reverseHex } from '../utils'
+import { networks, httpsOnly } from '../settings'
 import logger from '../logging'
 
 const log = logger('api')
@@ -14,14 +15,8 @@ export const name = 'neonDB'
  * @return {string} URL of API endpoint.
  */
 export const getAPIEndpoint = net => {
-  switch (net) {
-    case 'MainNet':
-      return 'http://ico.verisfoundation.com:5000'
-    case 'TestNet':
-      return 'http://ico.verisfoundation.com:5000'
-    default:
-      return net
-  }
+  if (networks[net]) return networks[net].extra.neonDB
+  return net
 }
 /**
  * Get balances of NEO and GAS for an address
@@ -30,7 +25,6 @@ export const getAPIEndpoint = net => {
  * @return {Promise<Balance>} Balance of address
  */
 export const getBalance = (net, address) => {
-  log.warn('Balance object expected to change shape in upcoming version')
   const apiEndpoint = getAPIEndpoint(net)
   return axios.get(apiEndpoint + '/v2/address/balance/' + address).then(res => {
     const bal = new Balance({ net, address: res.data.address })
@@ -38,8 +32,6 @@ export const getBalance = (net, address) => {
       if (key === 'net' || key === 'address') return
       bal.addAsset(key, res.data[key])
     })
-    // To be deprecated
-    Object.assign(bal, res.data)
     log.info(`Retrieved Balance for ${address} from neonDB ${net}`)
     return bal
   })
@@ -54,17 +46,37 @@ export const getBalance = (net, address) => {
 export const getClaims = (net, address) => {
   const apiEndpoint = getAPIEndpoint(net)
   return axios.get(apiEndpoint + '/v2/address/claims/' + address).then(res => {
-    const claims = res.data
-    claims.claims = claims.claims.map(c => {
+    const claimData = res.data
+    claimData.claims = claimData.claims.map(c => {
       return {
         claim: new Fixed8(c.claim).div(100000000),
         index: c.index,
+        txid: c.txid,
         start: new Fixed8(c.start),
         end: new Fixed8(c.end),
-        txid: c.txid
+        value: c.value
       }
     })
-    return claims
+    log.info(`Retrieved Claims for ${address} from neonDB ${net}`)
+    return new Claims(claimData)
+  })
+}
+
+/**
+ * Gets the maximum amount of gas claimable after spending all NEO.
+ * @param {string} net - 'MainNet' or 'TestNet'.
+ * @param {string} address - Address to check.
+ * @return {Promise<Fixed8>} An object with available and unavailable GAS amounts.
+ */
+export const getMaxClaimAmount = (net, address) => {
+  const apiEndpoint = getAPIEndpoint(net)
+  return axios.get(apiEndpoint + '/v2/address/claims/' + address).then(res => {
+    log.info(
+      `Retrieved maximum amount of gas claimable after spending all NEO for ${address} from neonDB ${net}`
+    )
+    return new Fixed8(res.data.total_claim + res.data.total_unspent_claim).div(
+      100000000
+    )
   })
 }
 
@@ -75,24 +87,48 @@ export const getClaims = (net, address) => {
  */
 export const getRPCEndpoint = net => {
   const apiEndpoint = getAPIEndpoint(net)
-  return axios.get(apiEndpoint + '/v2/network/best_node').then(response => {
-    log.info(`Best node from neonDB ${net}: ${response.data.node}`)
-    return response.data.node
-  })
+  return axios.get(apiEndpoint + '/v2/network/nodes')
+    .then((response) => {
+      const goodNodes = response.data.nodes.filter(n => n.status)
+      let bestHeight = 0
+      let nodes = []
+      for (const node of goodNodes) {
+        if (httpsOnly && !node.url.includes('https://')) continue
+        if (node.block_height > bestHeight) {
+          bestHeight = node.block_height
+          nodes = [node]
+        } else if (node.block_height === bestHeight) {
+          nodes.push(node)
+        }
+      }
+      if (nodes.length === 0) throw new Error('No eligible nodes found!')
+      return nodes[Math.floor(Math.random() * nodes.length)].url
+    })
 }
 
 /**
  * Get transaction history for an account
  * @param {string} net - 'MainNet' or 'TestNet'.
  * @param {string} address - Address to check.
- * @return {Promise<History>} History
+ * @return {Promise<PastTransaction[]>} a list of PastTransaction
  */
 export const getTransactionHistory = (net, address) => {
   const apiEndpoint = getAPIEndpoint(net)
-  return axios.get(apiEndpoint + '/v2/address/history/' + address).then(response => {
-    log.info(`Retrieved History for ${address} from neonDB ${net}`)
-    return response.data.history
-  })
+  return axios
+    .get(apiEndpoint + '/v2/address/history/' + address)
+    .then(response => {
+      log.info(`Retrieved History for ${address} from neonDB ${net}`)
+      return response.data.history.map(rawTx => {
+        return {
+          change: {
+            NEO: new Fixed8(rawTx.NEO || 0),
+            GAS: new Fixed8(rawTx.GAS || 0)
+          },
+          blockHeight: new Fixed8(rawTx.block_index),
+          txid: rawTx.txid
+        }
+      })
+    })
 }
 
 /**
@@ -159,7 +195,9 @@ export const doClaimAllGas = (net, privateKey, signingFunction) => {
 export const doMintTokens = (net, scriptHash, fromWif, neo, gasCost, signingFunction) => {
   log.warn('doMintTokens will be deprecated in favor of doInvoke')
   const account = new Account(fromWif)
-  const intents = [{ assetId: ASSET_ID.NEO, value: neo, scriptHash: scriptHash }]
+  const intents = [
+    { assetId: ASSET_ID.NEO, value: neo, scriptHash: scriptHash }
+  ]
   const invoke = { operation: 'mintTokens', scriptHash, args: [] }
   const rpcEndpointPromise = getRPCEndpoint(net)
   const balancePromise = getBalance(net, account.address)
@@ -203,6 +241,7 @@ export const doMintTokens = (net, scriptHash, fromWif, neo, gasCost, signingFunc
       return res
     })
 }
+
 /**
  * Send an asset to an address
  * @param {string} net - 'MainNet' or 'TestNet'.
@@ -219,7 +258,11 @@ export const doSendAsset = (net, toAddress, from, assetAmounts, signingFunction)
   const rpcEndpointPromise = getRPCEndpoint(net)
   const balancePromise = getBalance(net, fromAcct.address)
   const intents = Object.keys(assetAmounts).map(key => {
-    return { assetId: ASSET_ID[key], value: assetAmounts[key], scriptHash: toAcct.scriptHash }
+    return {
+      assetId: ASSET_ID[key],
+      value: assetAmounts[key],
+      scriptHash: toAcct.scriptHash
+    }
   })
   let signedTx
   let endpt

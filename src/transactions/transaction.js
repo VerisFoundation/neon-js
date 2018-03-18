@@ -1,11 +1,14 @@
-import { Account, getScriptHashFromPublicKey, getScriptHashFromAddress, isAddress } from '../wallet'
+import { Account } from '../wallet'
 import { TX_VERSION, ASSET_ID } from '../consts'
 import { createScript } from '../sc'
-import { Fixed8, str2hexstring, num2VarInt } from '../utils'
+import { Fixed8, str2hexstring } from '../utils'
 import TxAttrUsage from './txAttrUsage'
 import * as comp from './components'
 import * as core from './core'
 import * as exc from './exclusive'
+import logger from '../logging'
+
+const log = logger('tx')
 
 /**
  * @class Transaction
@@ -47,6 +50,10 @@ class Transaction {
     })
   }
 
+  get [Symbol.toStringTag] () {
+    return 'Transaction'
+  }
+
   /**
    * Exclusive Data
    * @type {Object}
@@ -72,6 +79,7 @@ class Transaction {
    */
   static createClaimTx (publicKeyOrAddress, claimData, override = {}) {
     if (claimData.claims.length === 0) throw new Error('Useless transaction! There is no claims!')
+    const acct = new Account(publicKeyOrAddress)
     const txConfig = Object.assign({
       type: 2,
       version: TX_VERSION.CLAIM
@@ -85,9 +93,12 @@ class Transaction {
     txConfig.outputs = [{
       assetId: ASSET_ID.GAS,
       value: totalClaim,
-      scriptHash: new Account(publicKeyOrAddress).scriptHash
+      scriptHash: acct.scriptHash
     }]
-    return new Transaction(Object.assign(txConfig, override))
+
+    const tx = new Transaction(Object.assign(txConfig, override))
+    log.info(`New ClaimTransaction for ${acct.address}`)
+    return tx
   }
 
   /**
@@ -104,7 +115,9 @@ class Transaction {
       version: TX_VERSION.CONTRACT,
       outputs: intents
     }, override)
-    return new Transaction(txConfig).calculate(balances)
+    const tx = new Transaction(txConfig).calculate(balances)
+    log.info(`New ContractTransaction for ${balances.address}`)
+    return tx
   }
 
   /**
@@ -125,7 +138,9 @@ class Transaction {
       script: typeof (invoke) === 'string' ? invoke : createScript(invoke),
       gas: gasCost
     }, override)
-    return new Transaction(txConfig).calculate(balances)
+    const tx = new Transaction(txConfig).calculate(balances)
+    log.info(`New InvocationTransaction for ${balances.address}`)
+    return tx
   }
 
   /**
@@ -162,13 +177,13 @@ class Transaction {
    */
   addAttribute (usage, data) {
     if (typeof data !== 'string') throw new TypeError('data should be formatted as string!')
-    const len = num2VarInt(data.length / 2)
     this.attributes.push({
       usage,
-      data: len + data
+      data
     })
     return this
   }
+
   /**
    * Add a remark.
    * @param {string} remark - A remark in ASCII.
@@ -189,6 +204,7 @@ class Transaction {
     this.inputs = inputs
     this.outputs = this.outputs.concat(change)
     balance.applyTx(this)
+    log.info(`Calculated the inputs required for Transaction with Balance: ${balance.address}`)
     return this
   }
 
@@ -218,7 +234,9 @@ class Transaction {
     if (typeof signer === 'string') {
       signer = new Account(signer)
     }
-    return core.signTransaction(this, signer.privateKey)
+    core.signTransaction(this, signer.privateKey)
+    log.info(`Signed Transaction with Account: ${signer.label}`)
+    return this
   }
 }
 

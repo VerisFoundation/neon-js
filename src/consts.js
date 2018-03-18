@@ -20,11 +20,9 @@ export const CONTRACTS = {
   TEST_RHTT4: 'f9572c5b119a6b5775a6af07f1cef5d310038f55'
 }
 
-export const TEST_NXT_ADDRESS = 'AHcLAfnvzzHyuPPULeXrXZ6RK3Hkdvi1qi'
-
 export const DEFAULT_RPC = {
-  MAIN: 'http://seed1.neo.org:10332',
-  TEST: 'http://seed1.neo.org:20332'
+  MAIN: 'https://seed1.neo.org:10331',
+  TEST: 'https://seed1.neo.org:20331'
 }
 
 export const DEFAULT_REQ = { jsonrpc: '2.0', method: 'getblockcount', params: [], id: 1234 }
@@ -36,12 +34,30 @@ export const DEFAULT_SCRYPT = {
   size: 64
 }
 
+export const DEFAULT_SYSFEE = {
+  enrollmentTransaction: 1000,
+  issueTransaction: 500,
+  publishTransaction: 500,
+  registerTransaction: 10000
+}
+
 export const DEFAULT_WALLET = {
   name: 'myWallet',
   version: '1.0',
   scrypt: {},
   accounts: [],
   extra: null
+}
+
+export const DEFAULT_ACCOUNT_CONTRACT = {
+  'script': '',
+  'parameters': [
+    {
+      'name': 'signature',
+      'type': 'Signature'
+    }
+  ],
+  'deployed': false
 }
 
 export const NEO_NETWORK = {

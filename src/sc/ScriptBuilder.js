@@ -1,4 +1,4 @@
-import { StringStream, num2hexstring, reverseHex, int2hex, str2ab, ab2hexstring, str2hexstring } from '../utils.js'
+import { StringStream, num2hexstring, reverseHex, ensureHex, int2hex, str2ab, ab2hexstring, str2hexstring } from '../utils.js'
 import OpCode from './opCode.js'
 
 /**
@@ -14,12 +14,14 @@ class ScriptBuilder extends StringStream {
    * @return {ScriptBuilder} this
    */
   _emitAppCall (scriptHash, useTailCall = false) {
-    if (scriptHash.length !== 40) throw new Error()
+    ensureHex(scriptHash)
+    if (scriptHash.length !== 40) throw new Error('ScriptHash should be 20 bytes long!')
     return this.emit(useTailCall ? OpCode.TAILCALL : OpCode.APPCALL, reverseHex(scriptHash))
   }
 
   /**
    * Private method to append an array
+   * @private
    * @param {Array} arr
    * @return {ScriptBuilder} this
    */
@@ -32,10 +34,12 @@ class ScriptBuilder extends StringStream {
 
   /**
    * Private method to append a hexstring.
+   * @private
    * @param {string} hexstring - Hexstring(BE)
    * @return {ScriptBuilder} this
    */
   _emitString (hexstring) {
+    ensureHex(hexstring)
     const size = hexstring.length / 2
     if (size <= OpCode.PUSHBYTES75) {
       this.str += num2hexstring(size)
@@ -58,6 +62,7 @@ class ScriptBuilder extends StringStream {
 
   /**
    * Private method to append a number.
+   * @private
    * @param {number} num
    * @return {ScriptBuilder} this
    */
@@ -65,17 +70,19 @@ class ScriptBuilder extends StringStream {
     if (num === -1) return this.emit(OpCode.PUSHM1)
     if (num === 0) return this.emit(OpCode.PUSH0)
     if (num > 0 && num <= 16) return this.emit(OpCode.PUSH1 - 1 + num)
-    return this.emitPush(reverseHex(int2hex(num)))
+    const hexstring = int2hex(num)
+    return this.emitPush(reverseHex('0'.repeat(16 - hexstring.length) + hexstring))
   }
 
   /**
    * Private method to append a ContractParam
+   * @private
    * @param {ContractParam} param
    * @return {ScriptBuilder} this
    */
   _emitParam (param) {
     if (!param.type) throw new Error('No type available!')
-    if (!param.value) throw new Error('No value available!')
+    if (!isValidValue(param.value)) throw new Error('Invalid value provided!')
     switch (param.type) {
       case 'String':
         return this._emitString(str2hexstring(param.value))
@@ -87,6 +94,8 @@ class ScriptBuilder extends StringStream {
         return this._emitString(param.value)
       case 'Array':
         return this._emitArray(param.value)
+      case 'Hash160':
+        return this._emitString(reverseHex(param.value))
     }
   }
 
@@ -143,6 +152,7 @@ class ScriptBuilder extends StringStream {
    * @return {ScriptBuilder} this
    */
   emitPush (data) {
+    if (data == null) return this.emitPush(false)
     switch (typeof (data)) {
       case 'boolean':
         return this.emit(data ? OpCode.PUSHT : OpCode.PUSHF)
@@ -162,20 +172,75 @@ class ScriptBuilder extends StringStream {
         throw new Error()
     }
   }
+
+  /**
+   * Reverse engineer a script back to its params.
+   * @return {scriptParams[]}
+   */
+  toScriptParams () {
+    this.reset()
+    const scripts = []
+    while (!this.isEmpty()) {
+      scripts.push(retrieveAppCall(this))
+    }
+    return scripts
+  }
+}
+
+const isValidValue = (value) => {
+  if (value) {
+    return true
+  } else if (value === 0) {
+    return true
+  } else if (value === '') {
+    return true
+  }
+  return false
 }
 
 /**
- * A wrapper method around ScripBuilder for creating a VM script.
- * @param {object} props - Properties passed in as an object.
- * @param {string} props.scriptHash - The contract scriptHash.
- * @param {string} [props.operation=null] - The method name to call.
- * @param {Array} [props.args=undefined] - The arguments of the method to pass in.
- * @param {boolean} [props.useTailCall=false] - To use Tail Call.
- * @return {string} The VM Script.
+ * Retrieves a single AppCall from a ScriptBuilder object.
+ * @param {ScriptBuilder} sb
+ * @return {scriptParams}
  */
-export const createScript = ({ scriptHash, operation = null, args = undefined, useTailCall = false }) => {
-  const sb = new ScriptBuilder()
-  return sb.emitAppCall(scriptHash, operation, args, useTailCall).str
+const retrieveAppCall = (sb) => {
+  const output = {
+    scriptHash: '',
+    args: []
+  }
+
+  while (!sb.isEmpty()) {
+    let b = sb.read()
+    let n = parseInt(b, 16)
+    switch (true) {
+      case (n === 0):
+        output.args.unshift(0)
+        break
+      case (n < 75):
+        output.args.unshift(sb.read(n))
+        break
+      case (n >= 81 && n <= 96):
+        output.args.unshift(n - 80)
+        break
+      case (n === 193):
+        const len = output.args.shift()
+        const cache = []
+        for (var i = 0; i < len; i++) { cache.unshift(output.args.shift()) }
+        output.args.unshift(cache)
+        break
+      case (n === 103):
+        output.scriptHash = reverseHex(sb.read(20))
+        output.useTailCall = false
+        return output
+      case (n === 105):
+        output.scriptHash = reverseHex(sb.read(20))
+        output.useTailCall = true
+        return output
+      default:
+        throw new Error(`Encounter unknown byte: ${b}`)
+    }
+  }
+  return output
 }
 
 export default ScriptBuilder

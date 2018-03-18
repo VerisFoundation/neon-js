@@ -1,5 +1,8 @@
-import { SHA256, RIPEMD160, enc } from 'crypto-js'
+import hexEncoding from 'crypto-js/enc-hex'
+import SHA256 from 'crypto-js/sha256'
+import RIPEMD160 from 'crypto-js/ripemd160'
 import BN from 'bignumber.js'
+import util from 'util'
 
 /**
  * @param {arrayBuffer} buf
@@ -28,9 +31,7 @@ export const str2ab = str => {
  * @returns {number[]}
  */
 export const hexstring2ab = str => {
-  if (typeof str !== 'string') {
-    throw new Error('hexstring2ab expects a string')
-  }
+  ensureHex(str)
   if (!str.length) return new Uint8Array()
   const iters = str.length / 2
   const result = new Uint8Array(iters)
@@ -113,7 +114,7 @@ export const num2hexstring = (num, size = 1, littleEndian = false) => {
 export const num2fixed8 = (num, size = 8) => {
   if (typeof num !== 'number') throw new Error('num must be numeric')
   if (size % 1 !== 0) throw new Error('size must be a whole integer')
-  return num2hexstring(Math.round(num * Math.pow(10, 8)), size, true)
+  return new Fixed8(num.toFixed(8)).toReverseHex().slice(0, size * 2)
 }
 
 /**
@@ -122,10 +123,9 @@ export const num2fixed8 = (num, size = 8) => {
  * @return {number}
  */
 export const fixed82num = (fixed8hex) => {
-  if (typeof fixed8hex !== 'string') throw new Error('fixed8hex must be a string')
-  if (fixed8hex.length % 2 !== 0) throw new Error('fixed8hex must be hex')
+  ensureHex(fixed8hex)
   if (fixed8hex === '') return 0
-  return parseInt(reverseHex(fixed8hex), 16) / Math.pow(10, 8)
+  return Fixed8.fromReverseHex(fixed8hex).toNumber()
 }
 
 /**
@@ -155,9 +155,9 @@ export const num2VarInt = (num) => {
  * @returns {string} XOR output as a HEX string
  */
 export const hexXor = (str1, str2) => {
-  if (typeof str1 !== 'string' || typeof str2 !== 'string') throw new Error('hexXor expects hex strings')
+  ensureHex(str1)
+  ensureHex(str2)
   if (str1.length !== str2.length) throw new Error('strings are disparate lengths')
-  if (str1.length % 2 !== 0) throw new Error('strings must be hex')
   const result = []
   for (let i = 0; i < str1.length; i += 2) {
     result.push(parseInt(str1.substr(i, 2), 16) ^ parseInt(str2.substr(i, 2), 16))
@@ -188,13 +188,37 @@ export const reverseArray = arr => {
  * @return {string} HEX string reversed in 2s.
  */
 export const reverseHex = hex => {
-  if (typeof hex !== 'string') throw new Error('reverseHex expects a string')
-  if (hex.length % 2 !== 0) throw new Error(`Incorrect Length: ${hex}`)
+  ensureHex(hex)
   let out = ''
   for (let i = hex.length - 2; i >= 0; i -= 2) {
     out += hex.substr(i, 2)
   }
   return out
+}
+
+const hexRegex = /^([0-9A-Fa-f]{2})*$/
+
+/**
+ * Checks if input is a hexstring. Empty string is considered a hexstring.
+ * @example
+ * isHex('0101') = true
+ * isHex('') = true
+ * isHex('0x01') = false
+ * @param {string} str
+ * @return {boolean}
+ */
+export const isHex = str => {
+  try {
+    return hexRegex.test(str)
+  } catch (err) { return false }
+}
+
+/**
+ * Throws an error if input is not hexstring.
+ * @param {string} str
+ */
+export const ensureHex = str => {
+  if (!isHex(str)) throw new Error(`Expected a hexstring but got ${str}`)
 }
 
 /**
@@ -217,11 +241,21 @@ export class StringStream {
   }
 
   /**
+   * Peek at the next bytes  on the string. May return less than intended bytes if reaching end of stream.
+   * @param {number} bytes
+   * @return {string}
+   */
+  peek (bytes = 1) {
+    if (this.isEmpty()) return ''
+    return this.substr(this.ptr, bytes * 2)
+  }
+
+  /**
    * Reads some bytes off the stream.
    * @param {number} bytes - Number of bytes to read
    * @returns {string}
    */
-  read (bytes) {
+  read (bytes = 1) {
     if (this.isEmpty()) throw new Error()
     const out = this.str.substr(this.pter, bytes * 2)
     this.pter += bytes * 2
@@ -247,6 +281,13 @@ export class StringStream {
     else if (len === 0xff) len = parseInt(reverseHex(this.read(8)), 16)
     return len
   }
+
+  /**
+   * Resets the pointer to start of string.
+   */
+  reset () {
+    this.pter = 0
+  }
 }
 
 /**
@@ -257,7 +298,7 @@ export class StringStream {
 export const hash160 = (hex) => {
   if (typeof hex !== 'string') throw new Error('reverseHex expects a string')
   if (hex.length % 2 !== 0) throw new Error(`Incorrect Length: ${hex}`)
-  let hexEncoded = enc.Hex.parse(hex)
+  let hexEncoded = hexEncoding.parse(hex)
   let ProgramSha256 = SHA256(hexEncoded)
   return RIPEMD160(ProgramSha256).toString()
 }
@@ -270,7 +311,7 @@ export const hash160 = (hex) => {
 export const hash256 = (hex) => {
   if (typeof hex !== 'string') throw new Error('reverseHex expects a string')
   if (hex.length % 2 !== 0) throw new Error(`Incorrect Length: ${hex}`)
-  let hexEncoded = enc.Hex.parse(hex)
+  let hexEncoded = hexEncoding.parse(hex)
   let ProgramSha256 = SHA256(hexEncoded)
   return SHA256(ProgramSha256).toString()
 }
@@ -283,15 +324,15 @@ export const hash256 = (hex) => {
 export const sha256 = (hex) => {
   if (typeof hex !== 'string') throw new Error('reverseHex expects a string')
   if (hex.length % 2 !== 0) throw new Error(`Incorrect Length: ${hex}`)
-  let hexEncoded = enc.Hex.parse(hex)
+  let hexEncoded = hexEncoding.parse(hex)
   return SHA256(hexEncoded).toString()
 }
 
 /**
  * @class Fixed8
- * @classdesc A warpper around bignumber.js that adds on helper methods commonly used in neon-js
+ * @classdesc A wrapper around bignumber.js that adds on helper methods commonly used in neon-js
  * @param {string|int} value
- * @param {[number]} base
+ * @param {number} [base]
  */
 export class Fixed8 extends BN {
   constructor (input, base = undefined) {
@@ -300,7 +341,7 @@ export class Fixed8 extends BN {
   }
 
   toHex () {
-    const hexstring = this.mul(100000000).round().toString(16)
+    const hexstring = this.times(100000000).round(0).toString(16)
     return '0'.repeat(16 - hexstring.length) + hexstring
   }
 
@@ -308,7 +349,7 @@ export class Fixed8 extends BN {
     return reverseHex(this.toHex())
   }
 
-  inspect (depth, opts) {
+  [util.inspect.custom] (depth, opts) {
     return this.toFixed(8)
   }
 
@@ -318,5 +359,117 @@ export class Fixed8 extends BN {
 
   static fromReverseHex (hex) {
     return this.fromHex(reverseHex(hex))
+  }
+
+  /**
+   * Returns a Fixed8 whose value is rounded upwards to the next whole number.
+   * @return {Fixed8}
+   */
+  ceil () {
+    return new Fixed8(super.ceil())
+  }
+
+  /**
+   * Returns a Fixed8 whose value is rounded downwards to the previous whole number.
+   * @return {Fixed8}
+   */
+  floor () {
+    return new Fixed8(super.floor())
+  }
+
+  /**
+   * Returns a Fixed8 rounded to the nearest dp decimal places according to rounding mode rm.
+   * If dp is null, round to whole number.
+   * If rm is null, round according to default rounding mode.
+   * @param {number} [dp]
+   * @param {number} [rm]
+   * @return {Fixed8}
+   */
+  round (dp = null, rm = null) {
+    return new Fixed8(super.round(dp, rm))
+  }
+
+  /**
+   * See [[dividedBy]]
+   * @param {string|number|Fixed8}
+   * @param {number} [base]
+   * @return {Fixed8}
+   */
+  div (n, base = null) {
+    return this.dividedBy(n, base)
+  }
+
+  /**
+   * Returns a Fixed8 whose value is the value of this Fixed8 divided by `n`
+   * @param {string|number|Fixed8}
+   * @param {number} [base]
+   * @return {Fixed8}
+   * @alias [[div]]
+   */
+  dividedBy (n, base = null) {
+    return new Fixed8(super.dividedBy(n, base))
+  }
+
+  /**
+   * See [[times]]
+   * @param {string|number|Fixed8}
+   * @param {number} [base]
+   * @return {Fixed8}
+   */
+  mul (n, base = null) {
+    return this.times(n, base)
+  }
+
+  /**
+   * Returns a Fixed8 whose value is the value of this Fixed8 multipled by `n`
+   * @param {string|number|Fixed8}
+   * @param {number} [base]
+   * @return {Fixed8}
+   * @alias [[mul]]
+   */
+  times (n, base = null) {
+    return new Fixed8(super.times(n, base))
+  }
+
+  /**
+   * See [[plus]]
+   * @param {string|number|Fixed8}
+   * @param {number} [base]
+   * @return {Fixed8}
+   */
+  add (n, base = null) {
+    return this.plus(n, base)
+  }
+
+  /**
+   * Returns a Fixed8 whose value is the value of this Fixed8 plus `n`
+   * @param {string|number|Fixed8}
+   * @param {number} [base]
+   * @return {Fixed8}
+   * @alias [[add]]
+   */
+  plus (n, base = null) {
+    return new Fixed8(super.plus(n, base))
+  }
+
+  /**
+   * See [[minus]]
+   * @param {string|number|Fixed8}
+   * @param {number} [base]
+   * @return {Fixed8}
+   */
+  sub (n, base = null) {
+    return this.minus(n, base)
+  }
+
+  /**
+   * Returns a Fixed8 whose value is the value of this Fixed8 minus `n`
+   * @param {string|number|Fixed8}
+   * @param {number} [base]
+   * @return {Fixed8}
+   * @alias [[sub]]
+   */
+  minus (n, base = null) {
+    return new Fixed8(super.minus(n, base))
   }
 }

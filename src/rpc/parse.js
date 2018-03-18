@@ -1,4 +1,5 @@
 import { ab2str, hexstring2ab } from '../utils'
+
 /**
  * Parses the VM Stack and returns human readable strings
  * @param {any} res - RPC Response
@@ -31,7 +32,7 @@ export const VMExtractor = (res) => {
 /**
  * Extracts the VM stack into an array and zips it with the provided array of parsing functions.
  * @param {function[]} funcs - An array of parsing functions.
- * @return {(res) => any[]} A parser function
+ * @return {function} A parser function
  */
 export const VMZip = (...args) => {
   return (res) => {

@@ -1,0 +1,50 @@
+{
+  "MainNet": {
+    "Name": "MainNet",
+    "ProtocolConfiguration": {
+      "Magic": 5460566,
+      "AddressVersion": 70,
+      "StandbyValidators": [
+        "023c18a271704cf5c71ead02084f07d8236b16fc0ba556b8818826e057201c6ec5",
+        "0305a7eb1698603dc651147e9f9e1ae64a0de5d65bf2dec6fcebc7388eb1a0ed69",
+        "02147ec7ecc1d6a8eb3ada3548ce85a944c819bf4697e79738edd610d45469bc6a",
+        "02b2364264df8795a9768e7dcb09bd595ee96531ddebf5646ac53bfcb5829d3801"
+      ],
+      "SeedList": [
+        "seed1.verisfoundation.com:10333",
+        "seed2.verisfoundation.com:10333",
+        "seed3.verisfoundation.com:10333",
+        "seed4.verisfoundation.com:10333"
+      ],
+      "SystemFee": {
+        "EnrollmentTransaction": 1000,
+        "IssueTransaction": 500,
+        "PublishTransaction": 500,
+        "RegisterTransaction": 10000
+      }
+    },
+    "ExtraConfiguration": {
+      "neonDB": "http://ico.verisfoundation.com:5000",
+      "neoscan": "https://scan.verisfoundation.com/api/main_net"
+    }
+  },
+  "TestNet": {
+    "Name": "TestNet",
+    "ProtocolConfiguration": {
+      "Magic": 1448235860,
+      "AddressVersion": 70,
+      "StandbyValidators": [],
+      "SeedList": [],
+      "SystemFee": {
+        "EnrollmentTransaction": 10,
+        "IssueTransaction": 5,
+        "PublishTransaction": 5,
+        "RegisterTransaction": 100
+      }
+    },
+    "ExtraConfiguration": {
+      "neonDB": "http://ico.verisfoundation.com:5000",
+      "neoscan": "https://scan.verisfoundation.com/api/test_net"
+    }
+  }
+}

@@ -12,6 +12,7 @@ const CURRENCY = ['aud', 'brl', 'cad', 'chf', 'clp', 'cny', 'czk', 'dkk', 'eur',
  * @return {Promise<number>} price
  */
 export const getPrice = (coin = 'NEO', currency = 'usd') => {
+  log.warn(`This is deprecated in favor of getPrices. There is a known bug for NEP5 tokens with this function.`)
   return query(`https://api.coinmarketcap.com/v1/ticker/${coin.toLowerCase()}/`, currency)
     .then((mapping) => {
       const price = mapping[coin.toUpperCase()]
@@ -26,8 +27,8 @@ export const getPrice = (coin = 'NEO', currency = 'usd') => {
 
 /**
  * Returns a mapping of the symbol for a coin to its price
- * @param {Array<string>} coins - Coin names. NEO or GAS.
- * @param {string} currency - Three letter currency symbol.
+ * @param {string[]} [coins] - Coin names. NEO or GAS.
+ * @param {string} [currency] - Three letter currency symbol.
  * @return {Promise<object>} object mapping symbol to price
  */
 export const getPrices = (coins = ['NEO'], currency = 'usd') => {
@@ -49,7 +50,7 @@ function query (url, currency) {
   currency = currency.toLowerCase()
 
   if (CURRENCY.includes(currency)) {
-    return axios.get(`${url}?convert=${currency}`)
+    return axios.get(`${url}?limit=0&convert=${currency}`)
       .then((response) => {
         const { data } = response
         if (data.error) throw new Error(data.error)

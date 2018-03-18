@@ -2,7 +2,7 @@ import * as neonDB from './neonDB'
 import * as cmc from './coinmarketcap'
 import * as nep5 from './nep5'
 import * as neoscan from './neoscan'
-
+import * as core from './core'
 /**
  * @typedef {object} History
  * @property {string} address - Address.
@@ -36,8 +36,12 @@ export default {
     sendAsset: neonDB.doSendAsset,
     claimAllGas: neonDB.doClaimAllGas,
     mintTokens: neonDB.doMintTokens
-  }
+  },
+  sendAsset: (config) => core.sendAsset(config),
+  claimGas: (config) => core.claimGas(config),
+  doInvoke: (config) => core.doInvoke(config)
 }
 
 export * from './core'
+export * from './switch'
 export { neonDB, cmc, nep5, neoscan }
